@@ -1,5 +1,5 @@
-import type { PromptSettings, Script } from '../types'
-import { idb, STORE_PRACTICE, STORE_SCRIPTS, STORE_SETTINGS, STORE_TEMPLATES } from './db'
+import type { PromptSettings, ReciteState, Script } from '../types'
+import { idb, STORE_PRACTICE, STORE_RECITE, STORE_SCRIPTS, STORE_SETTINGS, STORE_TEMPLATES } from './db'
 
 export const DEFAULT_SETTINGS: PromptSettings = {
   fontSizePx: 48,
@@ -28,6 +28,7 @@ export async function saveScript(script: Script): Promise<void> {
 
 export async function deleteScript(id: string): Promise<void> {
   await idb.delete(STORE_SCRIPTS, id)
+  await deleteReciteState(id)
 }
 
 /* ---------- Templates ---------- */
@@ -111,4 +112,28 @@ export async function bumpPractice(scriptId: string, lineIds: string[]): Promise
   for (const id of lineIds) counts[id] = (counts[id] ?? 0) + 1
   await idb.put(STORE_PRACTICE, { id: scriptId, counts } satisfies PracticeRecord, scriptId)
   return counts
+}
+
+/* ---------- Recite（默记练习：重点清单 + 续练进度） ---------- */
+
+export const EMPTY_RECITE: ReciteState = { id: '', focusIds: [], streaks: {} }
+
+export async function getReciteState(scriptId: string): Promise<ReciteState> {
+  const rec = await idb.get<ReciteState>(STORE_RECITE, scriptId)
+  if (!rec) return { id: scriptId, focusIds: [], streaks: {} }
+  return {
+    id: scriptId,
+    focusIds: Array.isArray(rec.focusIds) ? rec.focusIds : [],
+    streaks: rec.streaks ?? {},
+    session: rec.session,
+  }
+}
+
+export async function saveReciteState(scriptId: string, state: ReciteState): Promise<void> {
+  await idb.put(STORE_RECITE, { ...state, id: scriptId }, scriptId)
+}
+
+/** 删剧目时一并清理默记状态 */
+export async function deleteReciteState(scriptId: string): Promise<void> {
+  await idb.delete(STORE_RECITE, scriptId)
 }

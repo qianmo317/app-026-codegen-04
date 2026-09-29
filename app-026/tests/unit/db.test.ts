@@ -61,4 +61,38 @@ describe('IndexedDB 仓库（全部数据本地，不上传）', () => {
     expect(inst.title).toBe('文昭关')
     await repo.deleteTemplate(tpl.id)
   })
+
+  it('默记状态往返：重点清单与续练会话', async () => {
+    const id = 'script-recite-1'
+    const empty = await repo.getReciteState(id)
+    expect(empty.focusIds).toEqual([])
+    expect(empty.session).toBeUndefined()
+
+    await repo.saveReciteState(id, {
+      id,
+      focusIds: ['l2'],
+      streaks: { l2: 2 },
+      session: {
+        maskMode: 'tail',
+        ratio: 0.5,
+        durationMin: 10,
+        remainingSec: 420,
+        lineIds: ['l1', 'l2'],
+        focusOnly: false,
+        lines: [
+          { id: 'l1', masked: [false, true, true], status: 'peeked', revealed: [2] },
+          { id: 'l2', masked: [true, true], status: 'none', revealed: [] },
+        ],
+        focusSnapshot: [],
+        startedAt: 123,
+      },
+    })
+    const got = await repo.getReciteState(id)
+    expect(got.focusIds).toEqual(['l2'])
+    expect(got.session?.remainingSec).toBe(420)
+    expect(got.session?.lines[0].revealed).toEqual([2])
+
+    await repo.deleteReciteState(id)
+    expect((await repo.getReciteState(id)).focusIds).toEqual([])
+  })
 })

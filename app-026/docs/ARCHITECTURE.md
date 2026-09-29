@@ -9,8 +9,8 @@
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│  pages/   Home · ScriptEditor · Prompt · Stage ·    │
-│           Remotes · Settings · Print                │  ← 页面（路由 + 交互编排）
+│  pages/   Home · ScriptEditor · Recite · Prompt ·   │
+│           Stage · Remotes · Settings · Print        │  ← 页面（路由 + 交互编排）
 ├─────────────────────────────────────────────────────┤
 │  components/PromptCanvas                            │  ← 提词画布（渲染核心）
 ├─────────────────────────────────────────────────────┤
@@ -22,7 +22,7 @@
 │  parse · cues ·      │  repo（仓库 + 默认设置 +      │
 │  virtual · keys ·    │     设置双写持久化）           │
 │  segments · remote · │                              │
-│  wakelock            │                              │
+│  wakelock · recite   │                              │
 ├──────────────────────┴──────────────────────────────┤
 │  types.ts（数据模型） · router.tsx（手写 history 路由）│
 └─────────────────────────────────────────────────────┘
@@ -72,14 +72,21 @@
 
 ### 2.7 存储 `src/storage/db.ts` + `repo.ts`
 
-- IndexedDB v1，四个 store：`scripts` / `templates` / `settings` / `practice`（keyPath `id`）。
+- IndexedDB v2，五个 store：`scripts` / `templates` / `settings` / `practice` / `recite`（keyPath `id`；`recite` 存重点清单 + 未完成会话）。
 - `repo.ts` 暴露领域仓库函数；**设置采用双写持久化**（见 §3 设计决策 D4）：
   - 写：localStorage **同步**直写（含 `savedAt` 时间戳）+ IndexedDB 异步落盘；
   - 读：两侧各取一份，`savedAt` 较新者胜，用默认值合并补齐缺省字段。
 
-### 2.8 状态编排 `src/state/hooks.ts`
+### 2.7b 默记练习 `src/engine/recite.ts` + `pages/Recite.tsx`
 
-| Hook | 职责 |
+- **可遮字**：`isMaskable` 按 Unicode 码点认汉字/扩展 A/B/谚文/假名（用 `Array.from` 切代理对）；标点、数字、拉丁字母、空格不遮。
+- **三种遮法**：`ratio`（每句按比例随机挑字）、`tail`（只遮后半截，奇数句后半多一个）、`random`（整句要么全遮要么不遮，按比例抽句）。随机用种子化 PRNG（FNV-1a 种子 + mulberry32 + Fisher–Yates），**同轮续练遮字排布不变**。
+- **判句**：`revealed` 为空=perfect（一次没错）；露过哪怕一个=peeked（看了一眼）。
+- **重点清单**：连续两次 peeked 自动入清单（`applyJudgement`，幂等）；perfect 清零计数但不自动移出（手动「记住了」）。退出选「不保留」时 `rollbackFocus` 回到入场快照（新进句计数回到 1）。
+- **续练**：未完成会话存 `recite` store；`reconcileSession` 按当前原文校正（删句剔除、遮字数组按新长度裁剪/补 false、越界已露下标丢弃）。**练习全程不改原文**（只在 store 里存 masked/revealed）。
+- **倒计时**：`setInterval` 挂在 Recite 根组件（跨句不重挂、不跳秒），每秒直写 sessionRef，每 10 秒落盘；归零进报告且进度保留，可「接着练剩下的」（自动补一轮时长）。
+
+### 2.8 状态编排 `src/state/hooks.ts`| Hook | 职责 |
 |---|---|
 | `useSettings` | 全局设置加载；`patch` 立即经 repo 持久化（无防抖，防卸载丢失） |
 | `useScript` | 单剧目加载；`mutate` 防抖 400ms 自动保存 + `saved` 状态 + `saveNow` 立即保存 |
@@ -101,6 +108,7 @@
 |---|---|---|
 | Home | `/` | 剧目列表/新建/粘贴导入/示例导入（fetch `/samples/*.txt`）/模板实例化/删除 |
 | ScriptEditor | `/script/:id` | 粘贴替换/追加、行编辑与标记（hard/power/drag）、cue chips（秒数编辑）、批注、增删行、分段（✂ 拆分/重命名/循环勾选）、提醒卡、存模板 |
+| Recite | `/recite/:id` | 默记练习：选唱段/全剧、遮字方式（比例/后半截/随机抽句）、比例与时长可调、方块单露+整句全露、按句统计、连续两次卡壳自动进重点清单、只练清单、续练、退出时保留/不保留重点 |
 | Prompt | `/prompt/:id` | 排练：双引擎分栏（双人）、跳段（保播放状态 + 段循环标记自动续圈）、循环开关、调速、主题循环、全屏、提醒卡、遥控监听、**循环计时（见 §3 D5）** |
 | Stage | `/prompt/:id/stage` | 演出：Wake Lock 配对获取/释放、全屏、控件 2.5s 自动隐藏、锁定盾层（长按 2s SVG 进度环、Esc 解锁） |
 | Remotes | `/remotes` | 配对码输入、连接状态、遥控按钮（含数字跳段） |
@@ -140,6 +148,8 @@
 | D6 | 遥控用 BroadcastChannel 而非 WebRTC | md 允许「同屏双端 + 手势映射」简化；零依赖、无信令服务器、同浏览器场景完全够用 |
 | D7 | 手写 history 路由 | 避免 react-router 依赖（用户约定：无新第三方依赖）；页面仅 7 个，路由需求简单 |
 | D8 | 演出解锁用长按 2s + SVG 进度环 | 舞台误触退出是灾难；进度环给用户确定性反馈，`Esc` 保留桌面端逃生口 |
+| D9 | 默记遮字只在 `recite` store 存 masked/revealed，绝不回写 Line | 「练习过程不改原文」是硬约束；遮字用种子 PRNG 重算，续练同轮排布一致 |
+| D10 | 默记倒计时挂 Recite 根组件而非 PracticeView | 判句 setState 会重挂 PracticeView，计时器挂子组件会跳秒；根组件跨句连续计时 |
 
 ## 5. 性能预算与实测
 
@@ -154,4 +164,4 @@
 
 ## 6. 数据模型
 
-见 [README §9 附录](../README.md#9-数据模型附录)。存储布局：`scripts`/`templates` 以 `Script.id` 为 key；`settings` 固定 key `'app'`（记录含 `savedAt`）；`practice` 以 `scriptId` 为 key（值为 `{ id, counts: Record<lineId, number> }`）。
+见 [README §9 附录](../README.md#9-数据模型附录)。存储布局：`scripts`/`templates` 以 `Script.id` 为 key；`settings` 固定 key `'app'`（记录含 `savedAt`）；`practice` 以 `scriptId` 为 key（值为 `{ id, counts: Record<lineId, number> }`）；`recite` 以 `scriptId` 为 key（值为 `ReciteState`：重点清单 `focusIds`、连续计数 `streaks`、未完成会话 `session?`）。

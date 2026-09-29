@@ -40,6 +40,7 @@
 - **遥控**：同浏览器双窗口，遥控端凭 4 位配对码经 `BroadcastChannel` 控制提词端（播放/暂停、调速、跳段、跳过停留、循环）。
 - **双人提词**：左角色右角色分栏（对戏排练）。
 - **提醒卡**：易错句单独抽成卡片，排练前速览。
+- **默记练习**：选定唱段后把词换成占位方块考自己——按比例遮字 / 只遮后半截 / 按句随机抽遮；点方块露单字、点整句全露；按句统计「一次没错 / 看了一眼」；连着两次想不起来的句自动进重点清单，可只练这份清单；遮字比例与练习时长可调，中途退出可接着上次那一句练。
 - **打印版**：大字唱词 + 标记 + 批注，供无设备场合。
 - **练习计数**：循环练习自动累计，当前行显示「本条已练 N 次」。
 
@@ -80,6 +81,7 @@ docker compose down                  # 停止并清理
 ```
 /                  剧目列表（新建、粘贴导入、示例导入、模板实例化、删除）
 /script/:id        文稿编辑（粘贴替换/追加、行编辑、标记、过门标记秒数、批注、分段/拆分/重命名/循环勾选、提醒卡、存模板）
+/recite/:id        默记练习（遮字考自己：方块单露/整句全露、按句统计、重点清单、续练、倒计时）
 /prompt/:id        排练模式（自动滚动、循环、暂停、调速、跳段、双人分栏、遥控、提醒卡、主题切换）
 /prompt/:id/stage  演出模式（全屏大字、控件自动隐藏、锁定防误触）
 /remotes           遥控器（输入提词端配对码连接）
@@ -212,4 +214,20 @@ type Script = { id: string; title: string; troupe?: string; lines: Line[]; segme
                 style: 'opera'|'speech'; updatedAt: number };
 type PromptSettings = { fontSizePx: number; autoFit: boolean; autoScroll: boolean; speedPxPerSec: number;
                         theme: 'dark'|'light'|'highContrast'; holdOnCue: boolean; lockStage: boolean };
+
+// 默记练习（IndexedDB store「recite」，key=scriptId；只存遮字与练习进度，不改原文）
+type ReciteMaskMode = 'ratio' | 'tail' | 'random';          // 按比例 / 只遮后半截 / 按句随机抽遮
+type ReciteLineStatus = 'none' | 'perfect' | 'peeked';      // 未练 / 一次没错 / 看了一眼
+type ReciteSessionLine = { id: string; masked: boolean[];   // 每个可遮字（汉字/假名/谚文）是否遮住
+                           status: ReciteLineStatus; revealed: number[] };
+type ReciteSession = { maskMode: ReciteMaskMode; ratio: number; durationMin: number;
+                       remainingSec: number | null;         // 倒计时；null=不限时
+                       lineIds: string[]; focusOnly: boolean; lines: ReciteSessionLine[];
+                       focusSnapshot: string[]; startedAt: number };
+type ReciteState = { id: string; focusIds: string[];        // 连着两次 peeked 自动进重点
+                     streaks: Record<string, number>;       // 连续想不起来次数（perfect 清零）
+                     session?: ReciteSession };             // 未完成练习（续练）；完成后删除
 ```
+
+IndexedDB v2 共五个 store：`scripts` / `templates` / `settings` / `practice`（循环次数）/ `recite`（重点清单 + 续练会话）。
+
