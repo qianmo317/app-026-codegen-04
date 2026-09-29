@@ -52,8 +52,82 @@ describe('IndexedDB 仓库（全部数据本地，不上传）', () => {
     expect(c1).toBeDefined()
   })
 
-  it('模板保存与实例化', async () => {
-    const s = makeScript({ title: '文昭关' })
+  it('默记记录：默认空记录 → 保存往返（重点清单 + 会话）', async () => {
+    const id = 'script-memo-1'
+    const empty = await repo.getMemorize(id)
+    expect(empty.focus).toEqual([])
+    expect(empty.streaks).toEqual({})
+    expect(empty.session).toBeUndefined()
+    expect(empty.history).toEqual([])
+
+    await repo.saveMemorize({
+      ...empty,
+      focus: ['l1', 'l2'],
+      streaks: { l1: 2 },
+      session: {
+        startedAt: 123,
+        settings: { ratio: 0.5, mode: 'ratio', durationMin: 10, segmentIds: ['s1'], focusOnly: false },
+        order: ['l1', 'l2'],
+        cursor: 1,
+        seed: 99,
+        states: { l1: { masked: [false], everMasked: [true], fullRevealed: false, result: 'peeked' } },
+      },
+    })
+    const got = await repo.getMemorize(id)
+    expect(got.focus).toEqual(['l1', 'l2'])
+    expect(got.session?.cursor).toBe(1)
+    expect(got.session?.states.l1.result).toBe('peeked')
+  })
+
+  it('pruneMemorize：删除已不存在的句子并夹紧 cursor', async () => {
+    const id = 'script-memo-2'
+    await repo.saveMemorize({
+      id,
+      focus: ['gone', 'keep'],
+      streaks: { gone: 2, keep: 1 },
+      history: [],
+      session: {
+        startedAt: 1,
+        settings: { ratio: 0.5, mode: 'tail', durationMin: 0, segmentIds: ['s'], focusOnly: false },
+        order: ['gone', 'keep'],
+        cursor: 1,
+        seed: 7,
+        states: { gone: { masked: [], everMasked: [], fullRevealed: false }, keep: { masked: [true], everMasked: [true], fullRevealed: false } },
+      },
+      updatedAt: 0,
+    })
+    const pruned = await repo.pruneMemorize(id, new Set(['keep']))
+    expect(pruned.focus).toEqual(['keep'])
+    expect(pruned.streaks).toEqual({ keep: 1 })
+    expect(pruned.session?.order).toEqual(['keep'])
+    expect(pruned.session?.cursor).toBe(0)
+  })
+
+  it('pruneMemorize：全部句子已提交结果（练完未选择就关页）→ 清除会话', async () => {
+    const id = 'script-memo-3'
+    await repo.saveMemorize({
+      id,
+      focus: [],
+      streaks: {},
+      history: [],
+      session: {
+        startedAt: 1,
+        settings: { ratio: 0.5, mode: 'ratio', durationMin: 0, segmentIds: ['s'], focusOnly: false },
+        order: ['keep1', 'keep2'],
+        cursor: 2,
+        seed: 7,
+        states: {
+          keep1: { masked: [false], everMasked: [true], fullRevealed: false, result: 'perfect' },
+          keep2: { masked: [false, false], everMasked: [true, true], fullRevealed: true, result: 'failed' },
+        },
+      },
+      updatedAt: 0,
+    })
+    const pruned = await repo.pruneMemorize(id, new Set(['keep1', 'keep2']))
+    expect(pruned.session).toBeUndefined()
+  })
+
+  it('模板保存与实例化', async () => {    const s = makeScript({ title: '文昭关' })
     const tpl = await repo.saveAsTemplate(s)
     expect(tpl.title).toBe('模板·文昭关')
     const inst = repo.newScriptFrom(tpl)

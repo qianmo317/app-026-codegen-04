@@ -10,7 +10,7 @@
 ```
 ┌─────────────────────────────────────────────────────┐
 │  pages/   Home · ScriptEditor · Prompt · Stage ·    │
-│           Remotes · Settings · Print                │  ← 页面（路由 + 交互编排）
+│           Remotes · Settings · Print · Memorize     │  ← 页面（路由 + 交互编排）│
 ├─────────────────────────────────────────────────────┤
 │  components/PromptCanvas                            │  ← 提词画布（渲染核心）
 ├─────────────────────────────────────────────────────┤
@@ -20,9 +20,9 @@
 │  engine/             │  storage/                    │
 │  scroller · autofit  │  db（IndexedDB 封装）         │  ← 无 UI 的纯逻辑层
 │  parse · cues ·      │  repo（仓库 + 默认设置 +      │
-│  virtual · keys ·    │     设置双写持久化）           │
+│  virtual · keys ·    │     设置双写持久化 + 默记记录）│
 │  segments · remote · │                              │
-│  wakelock            │                              │
+│  wakelock · memorize │                              │
 ├──────────────────────┴──────────────────────────────┤
 │  types.ts（数据模型） · router.tsx（手写 history 路由）│
 └─────────────────────────────────────────────────────┘
@@ -95,7 +95,22 @@
 - 手势：单指拖拽（播放/停留中先暂停再 nudge）、双击播放暂停、长按 600ms 回调（演出页用）。
 - 行 DOM 带可测属性：`data-line-index`（原始行号）、`data-current`、`data-marks`（空格分隔）、练习徽标 `practice-badge`、`.prompt-content[data-fontsize]`。
 
-### 2.10 页面 `src/pages/`
+### 2.10 默记练习 `src/engine/memorize.ts`
+
+- **遮罩生成** `makeLineMask(text, mode, ratio, rng)`：只遮汉字/字母/数字（标点空白保留作记忆锚点）。
+  - `ratio`：可遮字按比例独立随机遮住；`tail`：从句中第一个字起遮后半截（奇数句后半多遮一字）；
+    `random`：整句按概率全遮或全露。
+  - PRNG 用 mulberry32 且按句派生种子（`seed + i×2654435761`），同次练习布局确定、退出重进一致。
+- **判定** `judgeLine`：`fullRevealed`→`failed`（整句没记住）；有曾遮字已露→`peeked`（看了一眼）；否则 `perfect`。
+- **重点清单** `applyFocus`：`failed` 使 streak +1，连续两次（跨练习，streak 持久化）自动入清单；
+  `perfect` 清零并毕业；`peeked` 不动 streak。`keep=false`（用户选「不保留」）撤销本次新增、不撤销毕业，
+  但 streak 仍累加。
+- **会话** `MemorizeSession`（order/cursor/states/startedAt）每次露字、翻句都实时持久化，
+  退出不丢；时长到点自动以当前 cursor 结算。
+- 记录存 IDB v2 新 store `memorize`（keyPath=scriptId），localStorage `otp-memorize-<id>` 同步快照兜底；
+  进页面时 `pruneMemorize` 清理已删句子的残留。
+
+### 2.11 页面 `src/pages/`
 
 | 页面 | 路由 | 职责 |
 |---|---|---|
@@ -106,6 +121,7 @@
 | Remotes | `/remotes` | 配对码输入、连接状态、遥控按钮（含数字跳段） |
 | Settings | `/settings` | 全部设置项 + 键位自定义表（remap 捕获 keydown）+ 恢复默认 + 遥控码 |
 | Print | `/print/:id` | 打印版（段落 + 标记色条 + 批注 + 图例，`@media print`） |
+| Memorize | `/memorize/:id` | 默记：选段/遮字方式（比例·后半截·随机抽）/比例与时长 → 逐句遮字练习（点方块露单字、点整句全露、Enter 下一句、倒计时）→ 按句统计三档 + 重点清单留存选择；续练卡片；断点会话实时持久化 |
 
 路由为手写 history 路由（`navigate` / `useRoute` / `Link` / `matchRoute`），不依赖 react-router。
 
@@ -140,6 +156,9 @@
 | D6 | 遥控用 BroadcastChannel 而非 WebRTC | md 允许「同屏双端 + 手势映射」简化；零依赖、无信令服务器、同浏览器场景完全够用 |
 | D7 | 手写 history 路由 | 避免 react-router 依赖（用户约定：无新第三方依赖）；页面仅 7 个，路由需求简单 |
 | D8 | 演出解锁用长按 2s + SVG 进度环 | 舞台误触退出是灾难；进度环给用户确定性反馈，`Esc` 保留桌面端逃生口 |
+| D9 | 默记遮罩按句派生种子的确定性 PRNG，不用每次渲染现抽 | 露字/翻句状态与位置一一对应；退出重进、刷新后同一句的方块位置必须一致，现抽会让已露的字「换地方」 |
+| D10 | 「看了一眼(peeked)」不清零连错 streak 也不入清单；只有整句全露(failed)计连错 | 偷看几个字提示就想起，说明句子处在「半生」状态，既不该算掌握也不该等同完全不会；整句投降才是硬失败 |
+| D11 | 默记记录独立 store，练习全程不写回 script | 原文是排练/演出的唯一事实源；练习产物（重点、进度）与文稿解耦，删改文稿后用 prune 清残留而非反向改文稿 |
 
 ## 5. 性能预算与实测
 
@@ -154,4 +173,4 @@
 
 ## 6. 数据模型
 
-见 [README §9 附录](../README.md#9-数据模型附录)。存储布局：`scripts`/`templates` 以 `Script.id` 为 key；`settings` 固定 key `'app'`（记录含 `savedAt`）；`practice` 以 `scriptId` 为 key（值为 `{ id, counts: Record<lineId, number> }`）。
+见 [README §9 附录](../README.md#9-数据模型附录)。存储布局：`scripts`/`templates` 以 `Script.id` 为 key；`settings` 固定 key `'app'`（记录含 `savedAt`）；`practice` 以 `scriptId` 为 key（值为 `{ id, counts: Record<lineId, number> }`）；`memorize`（IDB v2 新增，keyPath `id`=scriptId）存 `{ id, focus, streaks, session, history }`，localStorage 键 `otp-memorize-<scriptId>` 为同步快照。

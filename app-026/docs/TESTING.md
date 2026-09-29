@@ -6,9 +6,9 @@
 ## 1. 测试体系总览
 
 ```
-单元测试 (vitest, 41 例)      → 引擎/解析/存储/协议的确定性断言
+单元测试 (vitest, 64 例)      → 引擎/解析/存储/协议的确定性断言
         ↓
-E2E (Playwright, 6 组 spec)   → 真实浏览器全旅程与性能
+E2E (Playwright, 7 组 spec)   → 真实浏览器全旅程与性能
         ↓
 浏览器点测 (人工代理, 7 项)    → 视觉/交互/Console 巡检
         ↓
@@ -18,14 +18,14 @@ Docker 自检                   → 镜像体积/healthz/SPA 回退/容器健康
 运行方式（均在 `app-026/`）：
 
 ```bash
-npm test                          # 单元测试，一次性 41 例
+npm test                          # 单元测试，一次性 64 例
 npx vitest                        # watch 模式
 npm run e2e                       # 全部 E2E（webServer 自动起 preview :4173）
 npx playwright test tests/e2e/journey.spec.ts    # 单个 spec
 npx playwright test --headed      # 有头模式观察执行
 ```
 
-## 2. 单元测试（tests/unit/，41 例全绿）
+## 2. 单元测试（tests/unit/，64 例全绿）
 
 | 文件 | 环境 | 覆盖点 |
 |---|---|---|
@@ -34,16 +34,18 @@ npx playwright test --headed      # 有头模式观察执行
 | `parse.test.ts` | node | 「角色：唱词」解析（前缀 ≤6 字）；【过门N】【停顿N】【锣鼓】【注：x】（label 落点）；`##` 段头；空行分段；空过门行补占位 |
 | `virtual.test.ts` | node | 可视窗口计算边界（首/尾/越界/窗口收缩） |
 | `keys.test.ts` | jsdom | 默认键位表；自定义持久化；损坏 JSON 回退默认；localStorage 不可用时内存回退（vi.stubGlobal） |
-| `db.test.ts` | node | fake-indexeddb：四 store 建库、get/put/delete/getAll；设置保存读取往返（含 savedAt 剥离与默认值合并） |
+| `db.test.ts` | node | fake-indexeddb：五 store 建库、get/put/delete/getAll；设置保存读取往返（含 savedAt 剥离与默认值合并）；默记记录往返、`pruneMemorize` 删句清残留并夹紧 cursor |
+| `memorize.test.ts` | node | 可遮字符判定；三模式遮罩（比例确定性/后半截/整句随机二态/标点不遮）；perfect/peeked/failed 判定；选段+重点清单交集；连错两次入清单、perfect 毕业、peeked 不动 streak、不保留时撤销新增但保留 streak |
 | `wakelock.test.ts` | jsdom | WakeLockGuard 获取/释放**配对**（防泄漏）；不支持环境静默降级 |
 | `remote.test.ts` | node | 4 位配对码生成；`isRemoteCommand`/`isRemoteStatus` 类型守卫拒绝非法消息；合法消息往返 |
 
 工具：`tests/unit/setup.ts` 加载 fake-indexeddb（auto 注册），jsdom 环境文件按文件头注释 `// @vitest-environment jsdom` 切换。
 
-## 3. E2E 测试（tests/e2e/，6 组全绿）
+## 3. E2E 测试（tests/e2e/，7 组全绿）
 
 | Spec | 场景 |
 |---|---|
+| `memorize.spec.ts` | 默记全旅程：100% 遮字 → 点方块露单字（方块数减 1）→ 整句全露（`data-full`）→ 统计三档按句分组；二轮全错后**重点清单自动新增**；三轮勾选「只练重点清单」后练习句数=清单数，perfect 句毕业；中途退出再进续练卡片+露出状态保留+该句记 peeked；后半截模式前半可见 |
 | `journey.spec.ts` ①主旅程 | 首页新建 → 粘贴导入解析 → 编辑页标记（易错/加力）+ 批注 + 唱段头渲染 → 排练页：过门停留 → 空格跳过 → 播放/暂停恢复 → `↑` 调速 +10 → 数字键 `2` 跳段（断言行索引）→ `←` 回上一段 → 开启循环等到 `×1` → 练习徽标「已练 N 次」→ 演出页：锁定后点击无效 → 长按解锁（盾层消失）→ `Esc` → 刷新后标记/文稿仍在 |
 | `journey.spec.ts` ②设置与键位 | 关闭自动字号 → 手动 40px → 排练页字号生效 → 键位改 `p` 后旧键失效新键可控 → 刷新持久化 |
 | `autofit.spec.ts` | 200 行随机长度唱词：不换行（无横向溢出）+ 字号合理 + 虚拟列表 DOM 行数 < 120 |
@@ -87,6 +89,8 @@ npx playwright test --headed      # 有头模式观察执行
 | 3 | 设置修改后立即刷新/关页会丢失（E2E：排练页字号仍是自动值 94） | IndexedDB 写入在页面卸载时不可靠 + 300ms 防抖窗口 | 改为**无防抖**：localStorage 同步直写 + IndexedDB 双写，读侧 `savedAt` 取新合并（`repo.ts`） |
 | 4 | 按一次 `↑` 速度 +20（E2E：期望 100 实得 110） | `changeSpeed` 在 `setSpeed(speed+10)` 后又 `patch({speedPxPerSec: engine.speedValue + d})` 多加一次 `d`，设置同步回引擎放大 | `Prompt.tsx` / `Stage.tsx`：patch 改为 `engine.speedValue`（已是调速后值） |
 | 5 | 循环练习计数记到**下一段**的行（E2E：徽标不出现） | `indexAt()` 四舍五入使 pos ≥ 3.5×行高时 idx 已越界到下一段 → `onLoopIteration` 闭包捕获错误段索引 | `Prompt.tsx`：开启循环时把本段 `lineIds` 存入 `loopLineIdsRef`，回调直接使用（见架构 D5） |
+| 6 | 默记「看了部分字就点下一句」被误判成一次没错 | `judgeLine` 先判「还有遮着的字→perfect」，抢先于「是否露过字」的判定 | 判定顺序改为：`fullRevealed`→failed；有「曾遮且已露」→peeked；否则 perfect（`memorize.test.ts` 复现） |
+| 7 | 默记页用鼠标点「下一句」后按 Enter 会连跳两句 | 焦点停在按钮上，Enter 既触发按钮合成 click 又走全局快捷键 | 全局 keydown 里先把焦点按钮 blur，再执行翻句 |
 
 > 复盘：#3/#4/#5 均由 E2E 在真实浏览器中暴露，静态审查与单元测试未覆盖——**「写完单测不等于功能正确」**；#1 由浏览器点测诊断脚本抓到 console error 定位。
 

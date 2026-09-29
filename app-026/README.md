@@ -42,6 +42,7 @@
 - **提醒卡**：易错句单独抽成卡片，排练前速览。
 - **打印版**：大字唱词 + 标记 + 批注，供无设备场合。
 - **练习计数**：循环练习自动累计，当前行显示「本条已练 N 次」。
+- **默记练习**：选定唱段后把字换成占位方块考自己——按比例随机遮字 / 只遮每句后半截 / 按句随机抽遮；点方块露单字、点整句一次全露；结束按句统计「一次没错 / 看了一眼才想起 / 整句没记住」；连着两次没记住的句子自动进**重点清单**，下次可只练清单；遮字比例与练习时长可调，中途退出自动存进度、下次接着练。
 
 ## 3. 快速开始
 
@@ -82,6 +83,7 @@ docker compose down                  # 停止并清理
 /script/:id        文稿编辑（粘贴替换/追加、行编辑、标记、过门标记秒数、批注、分段/拆分/重命名/循环勾选、提醒卡、存模板）
 /prompt/:id        排练模式（自动滚动、循环、暂停、调速、跳段、双人分栏、遥控、提醒卡、主题切换）
 /prompt/:id/stage  演出模式（全屏大字、控件自动隐藏、锁定防误触）
+/memorize/:id      默记练习（遮字默记、逐句统计、重点清单、断点续练）
 /remotes           遥控器（输入提词端配对码连接）
 /settings          字号、自动滚动、速度、过门停留、锁定舞台、主题、键位自定义、遥控配对码
 /print/:id         打印版唱词（含标记与批注图例）
@@ -212,4 +214,22 @@ type Script = { id: string; title: string; troupe?: string; lines: Line[]; segme
                 style: 'opera'|'speech'; updatedAt: number };
 type PromptSettings = { fontSizePx: number; autoFit: boolean; autoScroll: boolean; speedPxPerSec: number;
                         theme: 'dark'|'light'|'highContrast'; holdOnCue: boolean; lockStage: boolean };
+// 默记练习（IDB store `memorize`，key=scriptId；localStorage 同步快照兜底）
+type MemorizeRecord = {
+  id: string                                  // = scriptId
+  focus: string[]                             // 重点清单 lineId（连错两次自动进）
+  streaks: Record<lineId, number>             // 每句连续没记住次数
+  session?: MemorizeSession                   // 进行中的会话（断点续练）
+  history: { at: number; mode: MaskMode; durationMin: number; totals: {...}; addedCount: number }[]
+};
+type MemorizeSession = {
+  startedAt: number; seed: number; cursor: number  // 当前练到第几句
+  settings: { ratio: number; mode: 'ratio'|'tail'|'random'; durationMin: number; segmentIds: string[]; focusOnly: boolean }
+  order: string[]                             // 本次练习句子顺序
+  states: Record<lineId, { masked: boolean[]; everMasked: boolean[]; fullRevealed: boolean; result?: 'perfect'|'peeked'|'failed' }>
+};
 ```
+
+> 句子判定：`perfect` 一个遮字没看就过；`peeked` 看过单字但没整句全露；`failed` 点过整句全露。
+> `failed` 连续两次（跨练习）自动入重点清单；`perfect` 清零 streak 并从清单毕业；`peeked` 不影响 streak。
+> 结束时可选择不保留本次清单改动（streak 仍记录）；练习过程只改 `memorize` 记录，不改原文。

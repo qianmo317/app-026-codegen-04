@@ -1,12 +1,13 @@
 /** 轻量 IndexedDB Promise 封装（无第三方依赖）。全部数据本地存储，不上传唱词。 */
 
 const DB_NAME = 'opera-teleprompter'
-const DB_VERSION = 1
+const DB_VERSION = 2
 
 export const STORE_SCRIPTS = 'scripts'
 export const STORE_TEMPLATES = 'templates'
 export const STORE_SETTINGS = 'settings'
 export const STORE_PRACTICE = 'practice'
+export const STORE_MEMORIZE = 'memorize'
 
 let dbPromise: Promise<IDBDatabase> | null = null
 
@@ -20,6 +21,7 @@ export function openDb(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains(STORE_TEMPLATES)) db.createObjectStore(STORE_TEMPLATES, { keyPath: 'id' })
       if (!db.objectStoreNames.contains(STORE_SETTINGS)) db.createObjectStore(STORE_SETTINGS)
       if (!db.objectStoreNames.contains(STORE_PRACTICE)) db.createObjectStore(STORE_PRACTICE)
+      if (!db.objectStoreNames.contains(STORE_MEMORIZE)) db.createObjectStore(STORE_MEMORIZE, { keyPath: 'id' })
     }
     req.onsuccess = () => resolve(req.result)
     req.onerror = () => reject(req.error ?? new Error('IndexedDB open failed'))

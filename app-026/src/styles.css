@@ -296,3 +296,96 @@ input[type='number'] { width: 56px; padding: 2px 4px; }
   .remote-digits { grid-template-columns: repeat(5, 1fr); }
   .prompt-body.dual { grid-template-columns: 1fr; }
 }
+
+/* ============ 默记练习 ============ */
+.memo-page { padding-bottom: 60px; }
+.memo-focus-hint { display: flex; align-items: center; gap: 6px; margin-top: -4px; }
+
+.memo-chips { margin-bottom: 10px; }
+.memo-chk { margin-top: 8px; font-size: 14px; }
+
+.memo-modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
+.memo-mode {
+  display: flex; flex-direction: column; gap: 6px; text-align: left;
+  background: transparent; color: var(--fg);
+  border: 1px solid var(--border); border-radius: 10px;
+  padding: 10px 12px; cursor: pointer; font-size: 14px;
+}
+.memo-mode span { font-size: 12px; }
+.memo-mode.active { background: var(--hl); border-color: var(--hl-border); }
+.memo-mode b { font-size: 14px; }
+
+.memo-start-bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.memo-start-bar p { margin: 0; }
+.btn-big { padding: 9px 22px; font-size: 15px; }
+
+/* 练习中 */
+.memo-practice { display: flex; flex-direction: column; gap: 14px; }
+.memo-bar {
+  display: flex; align-items: center; gap: 14px;
+  position: sticky; top: 0; z-index: 5;
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(4px);
+  padding: 6px 2px;
+}
+.memo-progress { font-size: 14px; color: var(--muted); flex: 1; }
+.memo-progress b { color: var(--fg); font-size: 16px; font-variant-numeric: tabular-nums; }
+.memo-timer {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-variant-numeric: tabular-nums; font-size: 15px;
+}
+.memo-timer.urgent { color: var(--danger); font-weight: 700; }
+
+.memo-card { margin: 0; padding: 28px 24px; }
+.memo-role { color: var(--accent); font-size: 15px; margin-bottom: 10px; }
+[data-theme='highContrast'] .memo-role { color: #ffffff; }
+.memo-line {
+  display: flex; flex-wrap: wrap; align-items: baseline;
+  font-size: 30px; line-height: 2.0; font-weight: 700; letter-spacing: 0.04em;
+  cursor: pointer; border-radius: 10px; padding: 4px 0;
+}
+.memo-line:hover { background: color-mix(in srgb, var(--accent) 5%, transparent); }
+.memo-char { display: inline-block; min-width: 1em; text-align: center; }
+.memo-punct { color: var(--muted); }
+.memo-cell {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 1.15em; height: 1.15em; margin: 0 0.04em;
+  font-size: 0.72em; line-height: 1;
+  background: var(--accent); color: var(--bg);
+  border: none; border-radius: 5px; cursor: pointer;
+  padding: 0; transform: translateY(-0.06em);
+}
+.memo-cell:hover { filter: brightness(1.12); }
+.memo-hint { font-size: 12.5px; margin: 14px 0 0; }
+.memo-failed-flag { color: var(--danger); margin-left: 4px; }
+
+.memo-actions { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+
+/* 统计 */
+.memo-totals { display: flex; gap: 12px; margin: 8px 0 10px; }
+.memo-total {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+  border: 1px solid var(--border); border-radius: 10px; padding: 12px 8px;
+}
+.memo-total b { font-size: 30px; font-variant-numeric: tabular-nums; }
+.memo-total span { font-size: 13px; color: var(--muted); }
+.memo-total.perfect b { color: var(--ok); }
+.memo-total.peeked b { color: var(--accent); }
+.memo-total.failed b { color: var(--danger); }
+
+.memo-group-title { display: flex; align-items: center; gap: 8px; }
+.memo-group-title.perfect { color: var(--ok); }
+.memo-group-title.peeked { color: var(--accent); }
+.memo-group-title.failed { color: var(--danger); }
+.memo-result-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.memo-result-list li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; font-size: 15px; line-height: 1.7; }
+.memo-result-seg { font-size: 12px; flex: none; }
+.memo-result-role { color: var(--accent); flex: none; }
+[data-theme='highContrast'] .memo-result-role { color: #ffffff; }
+.memo-failed-text { color: var(--danger); }
+.memo-decide { position: sticky; bottom: 12px; }
+
+@media (max-width: 720px) {
+  .memo-modes { grid-template-columns: 1fr; }
+  .memo-line { font-size: 24px; }
+}
